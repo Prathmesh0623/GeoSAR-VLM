@@ -1,0 +1,54 @@
+# Base configuration shared by all experiments.
+# Every experiment config (eo_only.yaml, sar_only.yaml, ...) extends this via
+# src/utils/config.py's `load_config(path)` which merges `defaults: [base]`.
+
+seed: 42
+
+data:
+  processed_dir: "data/processed"
+  splits_dir: "data/splits"
+  sar_bands: ["VV", "VH"]        # Section 5: prefer VV/VH where available
+  eo_bands: ["B04", "B03", "B02", "B08"]   # R, G, B, NIR — documented subset, not all 13 bands
+  image_size: 224
+  patch_size: 16
+  sar_norm: {mean: [-12.5, -19.0], std: [5.0, 5.0]}   # dB-scale VV/VH running stats (placeholder, recompute in Phase 1)
+  eo_norm: {mean: [0.485, 0.456, 0.406, 0.5], std: [0.229, 0.224, 0.225, 0.25]}
+  num_workers: 2
+
+model:
+  vision_embed_dim: 256
+  fusion_type: "concat"          # one of: none_eo | none_sar | concat | gated | cross_attention
+  fusion_hidden_dim: 256
+  projector_hidden_dim: 512
+  llm_embed_dim: 512             # kept small for CPU smoke tests / lightweight LLM head
+  freeze_sar_encoder: false
+  freeze_eo_encoder: true
+  freeze_llm: true
+  use_lora: false
+  lora_r: 8
+  lora_alpha: 16
+  lora_dropout: 0.05
+  lora_target_modules: ["q_proj", "v_proj"]
+
+training:
+  batch_size: 8
+  epochs: 10
+  lr: 3.0e-4
+  weight_decay: 0.01
+  grad_accum_steps: 1
+  mixed_precision: true
+  grad_checkpointing: false
+  warmup_ratio: 0.05
+  log_every_n_steps: 10
+  eval_every_n_epochs: 1
+  checkpoint_dir: "experiments/baseline"
+
+eval:
+  batch_size: 16
+  top_k: [1, 5, 10]
+
+logging:
+  use_wandb: false            # flip to true on Kaggle with WANDB_API_KEY set
+  wandb_project: "geosar-vlm"
+  run_name: "base"
+  results_dir: "results"

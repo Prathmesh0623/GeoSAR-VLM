@@ -1,0 +1,8 @@
+defaults: ["base"]
+experiment_name: "exp_003_concat_fusion"
+model:
+  fusion_type: "concat"
+training:
+  checkpoint_dir: "experiments/fusion/concat"
+logging:
+  run_name: "exp_003_concat_fusion"

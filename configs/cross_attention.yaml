@@ -1,0 +1,8 @@
+defaults: ["base"]
+experiment_name: "exp_005_cross_attention"
+model:
+  fusion_type: "cross_attention"
+training:
+  checkpoint_dir: "experiments/fusion/cross_attention"
+logging:
+  run_name: "exp_005_cross_attention"

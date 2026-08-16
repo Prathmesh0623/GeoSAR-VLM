@@ -1,0 +1,8 @@
+defaults: ["base"]
+experiment_name: "exp_001_eo_baseline"
+model:
+  fusion_type: "none_eo"
+training:
+  checkpoint_dir: "experiments/baseline/eo_only"
+logging:
+  run_name: "exp_001_eo_baseline"

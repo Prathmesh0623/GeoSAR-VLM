@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+message: "If you use this repository, please cite it as below."
+title: "GeoSAR-VLM: Multimodal Vision-Language Model for SAR and EO Satellite Image Understanding"
+authors:
+  - family-names: "<Your Last Name>"
+    given-names: "<Your First Name>"
+date-released: 2026-08-14
+version: 0.1.0
+repository-code: "<your-repo-url>"

@@ -1,0 +1,8 @@
+defaults: ["base"]
+experiment_name: "exp_002_sar_baseline"
+model:
+  fusion_type: "none_sar"
+training:
+  checkpoint_dir: "experiments/baseline/sar_only"
+logging:
+  run_name: "exp_002_sar_baseline"

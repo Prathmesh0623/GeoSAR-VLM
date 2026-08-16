@@ -1,0 +1,8 @@
+defaults: ["base"]
+experiment_name: "exp_004_gated_fusion"
+model:
+  fusion_type: "gated"
+training:
+  checkpoint_dir: "experiments/fusion/gated"
+logging:
+  run_name: "exp_004_gated_fusion"
