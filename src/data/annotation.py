@@ -81,3 +81,37 @@ def create_manual_eval_subset(records: List[Dict], n: int = 20, seed: int = 0) -
         rec["for_manual_review"] = True
         rec["reviewed"] = False
     return subset
+# --- Support for datasets with raw numeric labels only (no known class-name
+# mapping), e.g. the Kaggle "sen12ms-asia" .pt shard dataset. See
+# scripts/prepare_sen12ms_shards.py and docs/dataset.md.
+
+_NUMERIC_LABEL_CAPTION_TEMPLATES = [
+    "This scene corresponds to land-cover class {cid}.",
+    "The dominant land-cover type in this patch is class {cid}.",
+    "This satellite patch is labeled as land-cover class {cid} in the source dataset.",
+]
+
+
+def build_annotation_record_from_label_id(scene_id: str, sar_path: str, eo_path: str,
+                                           label_id: int, seed: int = 0) -> dict:
+    """Like build_annotation_record(), but for datasets that only provide a raw
+    numeric class id with no documented name mapping (e.g. sen12ms-asia shards).
+    Labels are kept as 'class_<id>' rather than guessed at, to avoid fabricating
+    scientific annotations (Section 6)."""
+    rng = random.Random(f"{seed}:{scene_id}")
+    caption = rng.choice(_NUMERIC_LABEL_CAPTION_TEMPLATES).format(cid=label_id)
+    qa_pairs = [
+        {"question": "What land-cover class does this scene belong to?",
+         "answer": f"class {label_id}"},
+        {"question": f"Is this scene labeled as class {label_id}?", "answer": "yes"},
+    ]
+    return {
+        "scene_id": scene_id,
+        "sar": sar_path,
+        "eo": eo_path,
+        "label": f"class_{label_id}",
+        "label_id": int(label_id),
+        "caption": caption,
+        "qa_pairs": qa_pairs,
+        "annotation_source": "auto_generated_template_numeric_label",
+    }

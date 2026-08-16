@@ -7,8 +7,8 @@ seed: 42
 data:
   processed_dir: "data/processed"
   splits_dir: "data/splits"
-  sar_bands: ["VV", "VH"]        # Section 5: prefer VV/VH where available
-  eo_bands: ["B04", "B03", "B02", "B08"]   # R, G, B, NIR — documented subset, not all 13 bands
+  sar_bands: ["b1", "b2", "b3"]
+  eo_bands: ["b1", "b2", "b3"]
   image_size: 224
   patch_size: 16
   sar_norm: {mean: [-12.5, -19.0], std: [5.0, 5.0]}   # dB-scale VV/VH running stats (placeholder, recompute in Phase 1)
