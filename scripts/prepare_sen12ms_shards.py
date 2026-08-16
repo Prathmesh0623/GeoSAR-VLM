@@ -10,6 +10,9 @@ Because the true IGBP class-name mapping for these numeric labels is not
 documented in this dataset upload, labels are kept as raw integers
 ("class_<id>") rather than guessed at - see docs/dataset.md.
 
+Real patches in this dataset are 256x256 - this script resizes them to
+--image-size (default 224) to match configs/base.yaml's data.image_size.
+
 Usage on Kaggle:
     python scripts/prepare_sen12ms_shards.py --shards-dir /kaggle/input/datasets/krishnaanchal/sen12ms-asia/asian_sen12ms_shards --out data/processed --max-shards 2 --samples-per-shard 300
 """
@@ -25,6 +28,8 @@ import sys
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from src.data.preprocessing import resize_chw
 
 
 def normalize_percentile_chw(arr: np.ndarray, lo_pct: float = 1.0, hi_pct: float = 99.0) -> np.ndarray:
@@ -46,6 +51,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--shards-dir", type=str, required=True)
     parser.add_argument("--out", type=str, default="data/processed")
+    parser.add_argument("--image-size", type=int, default=224,
+                         help="Resize every patch to this size (must match configs/base.yaml data.image_size)")
     parser.add_argument("--max-shards", type=int, default=None,
                          help="Only process this many shard files (each is ~1.5GB / 2000 samples). "
                               "Start small (e.g. 2) to validate before doing the full dataset.")
@@ -86,6 +93,10 @@ def main():
 
             sar_norm = normalize_percentile_chw(sar)
             opt_norm = normalize_percentile_chw(opt)
+
+            if sar_norm.shape[1] != args.image_size or sar_norm.shape[2] != args.image_size:
+                sar_norm = resize_chw(sar_norm, args.image_size)
+                opt_norm = resize_chw(opt_norm, args.image_size)
 
             scene_id = f"shard{shard_idx:03d}_sample{i:04d}"
             sar_rel, eo_rel = f"sar/{scene_id}.npy", f"eo/{scene_id}.npy"
