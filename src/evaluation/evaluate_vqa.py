@@ -41,8 +41,25 @@ def run_vqa_evaluation(cfg: Dict, split: str = "val", cpu_smoke_test: bool = Fal
         annotations_path=f"{data_cfg['processed_dir']}/annotations.json",
         split=split, image_size=data_cfg["image_size"], augment=False,
     )
-    all_texts = [s["caption"] for s in dataset.samples] + [s["question"] for s in dataset.samples if s["question"]]
-    tokenizer = SimpleTokenizer.build_from_texts(all_texts)
+
+    # --- Load the SAME tokenizer vocab used during training. Rebuilding a fresh
+    # vocab from this split's text would silently break word->id alignment with
+    # the trained embedding weights and make every evaluation meaningless.
+    ckpt_dir = cfg["training"]["checkpoint_dir"]
+    tokenizer_path = os.path.join(ckpt_dir, "tokenizer_vocab.json")
+    checkpoint_path = os.path.join(ckpt_dir, "checkpoint.pt")
+
+    is_trained_eval = os.path.exists(tokenizer_path) and os.path.exists(checkpoint_path)
+
+    if is_trained_eval:
+        tokenizer = SimpleTokenizer.load_vocab(tokenizer_path)
+        print(f"Loaded tokenizer vocab from {tokenizer_path}")
+    else:
+        all_texts = [s["caption"] for s in dataset.samples] + [s["question"] for s in dataset.samples if s["question"]]
+        tokenizer = SimpleTokenizer.build_from_texts(all_texts)
+        print(f"WARNING: no trained checkpoint/tokenizer found at {ckpt_dir} -- "
+              f"evaluating a freshly-initialized (untrained) model. Train first with "
+              f"scripts/train.py using the same --config.")
 
     batch_size = 2 if cpu_smoke_test else cfg["eval"]["batch_size"]
     n_samples = 4 if cpu_smoke_test else len(dataset)
@@ -50,6 +67,13 @@ def run_vqa_evaluation(cfg: Dict, split: str = "val", cpu_smoke_test: bool = Fal
                          batch_size=batch_size, shuffle=False)
 
     model = GeoSARVLM(cfg, vocab_size=len(tokenizer)).to(device)
+
+    if is_trained_eval:
+        from src.utils.checkpoint import load_checkpoint
+
+        model, trained_epoch = load_checkpoint(model, checkpoint_path, map_location=device)
+        print(f"Loaded trained weights from {checkpoint_path} (epoch {trained_epoch})")
+
     model.eval()
 
     preds, gts, captions_pred, captions_gt = [], [], [], []
@@ -64,8 +88,14 @@ def run_vqa_evaluation(cfg: Dict, split: str = "val", cpu_smoke_test: bool = Fal
                 captions_pred.append(outputs[i])
                 captions_gt.append(batch["answer"][i])
 
-    results = {"note": "Model is UNTRAINED / randomly-initialized in this smoke test — "
-                        "these numbers are meaningless except as a shape/pipeline check."}
+    if cpu_smoke_test:
+        note = "CPU smoke test: model is UNTRAINED (1 epoch / 3 batches) -- numbers are a shape/pipeline check only."
+    elif is_trained_eval:
+        note = f"Evaluated using trained checkpoint: {checkpoint_path}"
+    else:
+        note = "WARNING: evaluated an UNTRAINED, randomly-initialized model (no checkpoint found). Train first."
+
+    results = {"note": note}
     if preds:
         results["vqa"] = vqa_accuracy(preds, gts)
     if captions_pred:

@@ -83,9 +83,15 @@ def run_retrieval_training(cfg: Dict, cpu_smoke_test: bool = False) -> str:
     logger.finish()
 
     from src.utils.checkpoint import save_checkpoint, write_run_manifest
+    import os
 
     ckpt_dir = cfg["training"]["checkpoint_dir"]
     write_run_manifest(ckpt_dir, cfg, cfg["seed"])
+
+    tokenizer_path = os.path.join(ckpt_dir, "tokenizer_vocab.json")
+    tokenizer.save_vocab(tokenizer_path)
+    print(f"Saved tokenizer vocab to {tokenizer_path}")
+
     ckpt_path = save_checkpoint(model, optimizer, epoch=epochs - 1, checkpoint_dir=ckpt_dir,
                                  filename="retrieval_checkpoint.pt")
     print(f"Saved checkpoint to {ckpt_path}")

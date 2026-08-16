@@ -1,5 +1,5 @@
 """VQA / captioning training entry point (Section 17). Imported by
-scripts/train.py — keep this importable (no argparse/CLI here); CLI lives in scripts/.
+scripts/train.py - keep this importable (no argparse/CLI here); CLI lives in scripts/.
 """
 from __future__ import annotations
 
@@ -83,9 +83,19 @@ def run_vqa_training(cfg: Dict, cpu_smoke_test: bool = False) -> str:
     logger.finish()
 
     from src.utils.checkpoint import save_checkpoint, write_run_manifest
+    import os
 
     ckpt_dir = cfg["training"]["checkpoint_dir"]
     write_run_manifest(ckpt_dir, cfg, cfg["seed"])
+
+    # IMPORTANT: save the tokenizer vocab alongside the checkpoint. Evaluation and
+    # inference MUST reuse this exact vocab (same word -> id mapping), not rebuild
+    # a fresh one from a different text sample, or the trained embedding weights
+    # will be scored against the wrong word ids.
+    tokenizer_path = os.path.join(ckpt_dir, "tokenizer_vocab.json")
+    tokenizer.save_vocab(tokenizer_path)
+    print(f"Saved tokenizer vocab to {tokenizer_path}")
+
     ckpt_path = save_checkpoint(model, optimizer, epoch=epochs - 1, checkpoint_dir=ckpt_dir)
     print(f"Saved checkpoint to {ckpt_path}")
     return ckpt_path
