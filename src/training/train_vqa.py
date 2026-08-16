@@ -17,14 +17,21 @@ from src.utils.logging import ExperimentLogger
 from src.utils.tokenizer import SimpleTokenizer
 
 
-def build_vqa_step_fn(tokenizer: SimpleTokenizer, max_len: int = 32):
+def build_vqa_step_fn(tokenizer: SimpleTokenizer, question_max_len: int = 16, answer_max_len: int = 20):
+    """Encodes question and answer SEPARATELY: the question becomes cross-attention
+    context (so the model can actually read it), and the model only ever has to
+    predict the answer/caption tokens - never has to regenerate the question itself."""
+
     def step_fn(model: GeoSARVLM, batch: Dict) -> torch.Tensor:
-        texts = [f"{q} {a}".strip() if q else a for q, a in zip(batch["question"], batch["answer"])]
-        target_ids = torch.tensor(
-            [tokenizer.encode(t, max_len=max_len) for t in texts], device=next(model.parameters()).device
+        device = next(model.parameters()).device
+        question_ids = torch.tensor(
+            [tokenizer.encode(q or "", max_len=question_max_len) for q in batch["question"]], device=device
         )
-        logits = model(batch, target_ids)
-        return captioning_loss(logits, target_ids, pad_id=tokenizer.pad_id)
+        answer_ids = torch.tensor(
+            [tokenizer.encode(a, max_len=answer_max_len) for a in batch["answer"]], device=device
+        )
+        logits = model(batch, answer_ids, question_ids=question_ids)
+        return captioning_loss(logits, answer_ids, pad_id=tokenizer.pad_id)
 
     return step_fn
 

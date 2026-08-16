@@ -8,13 +8,15 @@ Two text-decoder backends are supported:
   - "tiny"  : a small from-scratch nn.TransformerDecoder + embedding, used for CPU
               smoke tests (Section 30) where no internet/GPU is available and we
               only need to verify tensor shapes end-to-end.
-  - "hf"    : wraps a real pretrained causal LM from Hugging Face (e.g. a small
-              Qwen-VL/LLaVA-style backbone chosen per Section 13's criteria), with
-              the visual projector output prepended as soft prompt embeddings, and
-              LoRA adapters applied via peft (Section 14) when `use_lora: true`.
-              This path requires `transformers`/`peft` and is intended for Kaggle.
+  - "hf"    : wraps a real pretrained causal LM from Hugging Face (Section 13/14).
 
 Swap by setting `model.text_backend: tiny|hf` in the config.
+
+QUESTION CONDITIONING: for VQA, the question is encoded and concatenated onto the
+visual tokens as cross-attention "memory", and the model only ever has to predict
+the ANSWER tokens (not the question). See encode_context() / forward(). For
+captioning (no question), question_ids is simply omitted and memory = visual
+tokens only.
 """
 from __future__ import annotations
 
@@ -32,8 +34,8 @@ from src.models.sar_encoder import SAREncoder
 
 class TinyTextDecoder(nn.Module):
     """Minimal causal transformer decoder over a small vocabulary. Not intended to
-    produce fluent language — only to validate that visual-token conditioning,
-    teacher forcing, and loss computation are wired correctly on CPU."""
+    produce fluent language - only to validate that visual/question-token
+    conditioning, teacher forcing, and loss computation are wired correctly on CPU."""
 
     def __init__(self, vocab_size: int, embed_dim: int, depth: int = 2, num_heads: int = 4,
                  max_len: int = 64):
@@ -48,16 +50,24 @@ class TinyTextDecoder(nn.Module):
         self.decoder = nn.TransformerDecoder(decoder_layer, num_layers=depth)
         self.head = nn.Linear(embed_dim, vocab_size)
 
-    def forward(self, visual_tokens: torch.Tensor, text_ids: torch.Tensor) -> torch.Tensor:
-        """visual_tokens: (B, V, D) soft-prompt tokens from the projector.
-        text_ids: (B, T) token ids (teacher forcing).
-        Returns logits (B, T, vocab_size) for the TEXT portion only."""
-        B, T = text_ids.shape
-        text_embed = self.token_embed(text_ids) + self.pos_embed[:, :T]
-        causal_mask = torch.triu(torch.full((T, T), float("-inf"), device=text_ids.device), diagonal=1)
-        # memory = visual tokens (cross-attended), tgt = text tokens (self-attended, causal)
-        out = self.decoder(tgt=text_embed, memory=visual_tokens, tgt_mask=causal_mask)
+    def embed(self, token_ids: torch.Tensor) -> torch.Tensor:
+        """token_ids: (B, T) -> (B, T, D) embeddings + positional encoding. Shared by
+        question-context encoding and answer/caption decode-target encoding."""
+        T = token_ids.shape[1]
+        return self.token_embed(token_ids) + self.pos_embed[:, :T]
+
+    def decode(self, memory: torch.Tensor, target_ids: torch.Tensor) -> torch.Tensor:
+        """memory: (B, M, D) cross-attention context (visual [+ question] tokens).
+        target_ids: (B, T) ids to teacher-force / generate (the ANSWER or CAPTION,
+        never including the question). Returns logits (B, T, vocab_size)."""
+        B, T = target_ids.shape
+        text_embed = self.embed(target_ids)
+        causal_mask = torch.triu(torch.full((T, T), float("-inf"), device=target_ids.device), diagonal=1)
+        out = self.decoder(tgt=text_embed, memory=memory, tgt_mask=causal_mask)
         return self.head(out)
+
+    def forward(self, memory: torch.Tensor, target_ids: torch.Tensor) -> torch.Tensor:
+        return self.decode(memory, target_ids)
 
     def pooled_text_embedding(self, text_ids: torch.Tensor) -> torch.Tensor:
         """Mean-pooled token embedding, used as the "text tower" output for retrieval."""
@@ -93,8 +103,7 @@ class GeoSARVLM(nn.Module):
         else:
             raise NotImplementedError(
                 "text_backend='hf' wires a pretrained HF causal LM + LoRA; implement in "
-                "Phase 6 once a specific model is selected on Kaggle (Section 13/14). "
-                "Kept out of the CPU-smoke-test path deliberately (needs network + GPU)."
+                "Phase 6 once a specific model is selected on Kaggle (Section 13/14)."
             )
 
         self.retrieval_head = RetrievalHead(
@@ -118,11 +127,24 @@ class GeoSARVLM(nn.Module):
             return self.fusion(sar_tokens, eo_tokens)
         return self.fusion(sar_tokens[:, 0], eo_tokens[:, 0])
 
-    def forward(self, batch: Dict[str, torch.Tensor], text_ids: torch.Tensor) -> torch.Tensor:
+    def encode_context(self, batch: Dict[str, torch.Tensor], question_ids: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """Builds the cross-attention memory the text decoder conditions on:
+        visual tokens alone (captioning), or visual tokens + question tokens (VQA).
+        This is what lets the model actually SEE the question instead of having to
+        blindly regenerate it."""
         fused = self.encode_vision(batch.get("sar"), batch.get("eo"))
-        visual_tokens = self.projector(fused)
-        logits = self.text_decoder(visual_tokens, text_ids)
-        return logits
+        visual_tokens = self.projector(fused)  # (B, V, D)
+        if question_ids is not None:
+            q_embed = self.text_decoder.embed(question_ids)  # (B, Tq, D)
+            return torch.cat([visual_tokens, q_embed], dim=1)
+        return visual_tokens
+
+    def forward(self, batch: Dict[str, torch.Tensor], target_ids: torch.Tensor,
+                question_ids: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """target_ids: the ANSWER (VQA) or CAPTION text to teacher-force/predict -
+        NEVER the question. Pass question_ids separately for VQA."""
+        memory = self.encode_context(batch, question_ids)
+        return self.text_decoder.decode(memory, target_ids)
 
     @torch.no_grad()
     def get_retrieval_embeddings(self, batch: Dict[str, torch.Tensor], text_ids: torch.Tensor):

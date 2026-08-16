@@ -16,14 +16,21 @@ from src.utils.tokenizer import SimpleTokenizer
 
 
 @torch.no_grad()
-def greedy_generate(model: GeoSARVLM, batch: Dict, tokenizer: SimpleTokenizer, max_new_tokens: int = 16) -> list:
+def greedy_generate(model: GeoSARVLM, batch: Dict, tokenizer: SimpleTokenizer,
+                     max_new_tokens: int = 16, question_max_len: int = 16) -> list:
+    """Generates the ANSWER (or caption) only. The question (if any) is encoded and
+    given to the model as context via encode_context(), matching how training works
+    now - the model reads the question, it doesn't have to regenerate it."""
     device = next(model.parameters()).device
-    fused = model.encode_vision(batch.get("sar"), batch.get("eo"))
-    visual_tokens = model.projector(fused)
-    B = visual_tokens.shape[0]
+    questions = batch.get("question", [""] * len(batch["sar"]))
+    question_ids = torch.tensor(
+        [tokenizer.encode(q or "", max_len=question_max_len) for q in questions], device=device
+    )
+    memory = model.encode_context(batch, question_ids)
+    B = memory.shape[0]
     generated = torch.full((B, 1), tokenizer.bos_id, dtype=torch.long, device=device)
     for _ in range(max_new_tokens):
-        logits = model.text_decoder(visual_tokens, generated)
+        logits = model.text_decoder.decode(memory, generated)
         next_token = logits[:, -1, :].argmax(dim=-1, keepdim=True)
         generated = torch.cat([generated, next_token], dim=1)
         if (next_token == tokenizer.eos_id).all():
