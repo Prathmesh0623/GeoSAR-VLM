@@ -1,0 +1,16 @@
+{
+  "note": "Evaluated using trained checkpoint: experiments/fusion/cross_attention/checkpoint.pt",
+  "vqa": {
+    "open": {
+      "exact_match": 0.39260969976905313,
+      "f1": 0.5637990762124712,
+      "n": 1732
+    },
+    "overall": {
+      "exact_match": 0.39260969976905313,
+      "f1": 0.5637990762124712,
+      "n": 1732
+    }
+  },
+  "captioning_bleu1": 0.4607782684610248
+}

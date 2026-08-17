@@ -12,7 +12,7 @@ experiments/**/*.pth
 experiments/**/*.ckpt
 experiments/**/wandb/
 results/figures/*.png
-results/metrics/*.csv
+
 
 # secrets
 .env

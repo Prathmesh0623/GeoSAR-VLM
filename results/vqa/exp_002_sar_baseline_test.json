@@ -1,0 +1,16 @@
+{
+  "note": "Evaluated using trained checkpoint: experiments/baseline/sar_only/checkpoint.pt",
+  "vqa": {
+    "open": {
+      "exact_match": 0.15762124711316397,
+      "f1": 0.45381062355658197,
+      "n": 1732
+    },
+    "overall": {
+      "exact_match": 0.15762124711316397,
+      "f1": 0.45381062355658197,
+      "n": 1732
+    }
+  },
+  "captioning_bleu1": 0.5974418191508261
+}
