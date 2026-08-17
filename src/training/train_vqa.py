@@ -53,9 +53,11 @@ def run_vqa_training(cfg: Dict, cpu_smoke_test: bool = False) -> str:
         augment=True,
         seed=cfg["seed"],
     )
-    all_texts = [s["caption"] for s in dataset.samples] + [
-        s["question"] for s in dataset.samples if s["question"]
-    ]
+    all_texts = (
+        [s["caption"] for s in dataset.samples]
+        + [s["question"] for s in dataset.samples if s["question"]]
+        + [s["answer"] for s in dataset.samples]
+    )
     tokenizer = SimpleTokenizer.build_from_texts(all_texts)
 
     batch_size = 2 if cpu_smoke_test else cfg["training"]["batch_size"]
