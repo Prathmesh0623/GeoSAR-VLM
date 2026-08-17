@@ -31,8 +31,8 @@ def synthetic_processed_dir(tmp_path):
     records = []
     scene_ids = [f"scene_{i:03d}" for i in range(12)]
     for i, scene_id in enumerate(scene_ids):
-        sar = rng.uniform(0, 1, size=(2, 32, 32)).astype(np.float32)
-        eo = rng.uniform(0, 1, size=(4, 32, 32)).astype(np.float32)
+        sar = rng.uniform(0, 1, size=(3, 32, 32)).astype(np.float32)
+        eo = rng.uniform(0, 1, size=(3, 32, 32)).astype(np.float32)
         np.save(out_dir / f"sar/{scene_id}.npy", sar)
         np.save(out_dir / f"eo/{scene_id}.npy", eo)
         label = LAND_COVER_CLASSES[i % len(LAND_COVER_CLASSES)]

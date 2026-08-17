@@ -75,6 +75,6 @@ def test_geosar_dataset_getitem_shapes(synthetic_processed_dir):
     )
     assert len(ds) > 0
     sample = ds[0]
-    assert sample["sar"].shape[0] == 2
-    assert sample["eo"].shape[0] == 4
+    assert sample["sar"].shape[0] == 3
+    assert sample["eo"].shape[0] == 3
     assert sample["task"] in ("captioning", "vqa")
