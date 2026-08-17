@@ -20,7 +20,12 @@ def greedy_generate(model: GeoSARVLM, batch: Dict, tokenizer: SimpleTokenizer,
                      max_new_tokens: int = 16, question_max_len: int = 16) -> list:
     """Generates the ANSWER (or caption) only. The question (if any) is encoded and
     given to the model as context via encode_context(), matching how training works
-    now - the model reads the question, it doesn't have to regenerate it."""
+    now - the model reads the question, it doesn't have to regenerate it.
+
+    Stops each sample individually once IT predicts EOS, instead of waiting for
+    every sample in the batch to agree - otherwise samples that finish early keep
+    generating extra garbage tokens until the slowest sample in the batch stops.
+    """
     device = next(model.parameters()).device
     questions = batch.get("question", [""] * len(batch["sar"]))
     question_ids = torch.tensor(
@@ -29,12 +34,21 @@ def greedy_generate(model: GeoSARVLM, batch: Dict, tokenizer: SimpleTokenizer,
     memory = model.encode_context(batch, question_ids)
     B = memory.shape[0]
     generated = torch.full((B, 1), tokenizer.bos_id, dtype=torch.long, device=device)
+    finished = torch.zeros(B, dtype=torch.bool, device=device)
+
     for _ in range(max_new_tokens):
         logits = model.text_decoder.decode(memory, generated)
         next_token = logits[:, -1, :].argmax(dim=-1, keepdim=True)
+        # Once a sample is finished, force it to keep emitting PAD instead of
+        # whatever it would predict next, so its output stays clean.
+        next_token = torch.where(
+            finished.unsqueeze(1), torch.full_like(next_token, tokenizer.pad_id), next_token
+        )
         generated = torch.cat([generated, next_token], dim=1)
-        if (next_token == tokenizer.eos_id).all():
+        finished = finished | (next_token.squeeze(1) == tokenizer.eos_id)
+        if finished.all():
             break
+
     return [tokenizer.decode(row.tolist()) for row in generated]
 
 
