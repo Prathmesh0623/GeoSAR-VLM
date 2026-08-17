@@ -10,7 +10,7 @@ Two consequences that follow from this and MUST be respected downstream:
   1. `docs/dataset.md` must describe this generation procedure.
   2. A small subset of scenes must be pulled into `create_manual_eval_subset()` and
      manually reviewed/corrected before being used to report VQA/caption metrics in
-     any results table — auto-generated text should not be the sole evaluation set.
+     any results table - auto-generated text should not be the sole evaluation set.
 """
 from __future__ import annotations
 
@@ -81,6 +81,8 @@ def create_manual_eval_subset(records: List[Dict], n: int = 20, seed: int = 0) -
         rec["for_manual_review"] = True
         rec["reviewed"] = False
     return subset
+
+
 # --- Support for datasets with raw numeric labels only (no known class-name
 # mapping), e.g. the Kaggle "sen12ms-asia" .pt shard dataset. See
 # scripts/prepare_sen12ms_shards.py and docs/dataset.md.
@@ -93,17 +95,34 @@ _NUMERIC_LABEL_CAPTION_TEMPLATES = [
 
 
 def build_annotation_record_from_label_id(scene_id: str, sar_path: str, eo_path: str,
-                                           label_id: int, seed: int = 0) -> dict:
+                                           label_id: int, all_label_ids: list = None,
+                                           seed: int = 0) -> dict:
     """Like build_annotation_record(), but for datasets that only provide a raw
     numeric class id with no documented name mapping (e.g. sen12ms-asia shards).
     Labels are kept as 'class_<id>' rather than guessed at, to avoid fabricating
-    scientific annotations (Section 6)."""
+    scientific annotations (Section 6).
+
+    The yes/no question now asks about a RANDOM class (correct ~50% of the time,
+    a wrong distractor class ~50% of the time), so "no" is an actual possible
+    answer. Previously it always asked about the true label, making "yes" the
+    answer 100% of the time -- a model could score perfectly on that question
+    type without looking at the image at all.
+    """
     rng = random.Random(f"{seed}:{scene_id}")
     caption = rng.choice(_NUMERIC_LABEL_CAPTION_TEMPLATES).format(cid=label_id)
+
+    if all_label_ids and len(all_label_ids) > 1 and rng.random() < 0.5:
+        distractor_pool = [c for c in all_label_ids if c != label_id]
+        asked_id = rng.choice(distractor_pool)
+        yn_answer = "no"
+    else:
+        asked_id = label_id
+        yn_answer = "yes"
+
     qa_pairs = [
         {"question": "What land-cover class does this scene belong to?",
          "answer": f"class {label_id}"},
-        {"question": f"Is this scene labeled as class {label_id}?", "answer": "yes"},
+        {"question": f"Is this scene labeled as class {asked_id}?", "answer": yn_answer},
     ]
     return {
         "scene_id": scene_id,

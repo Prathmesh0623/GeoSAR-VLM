@@ -73,12 +73,14 @@ def main():
 
         records = []
         scene_ids = []
+        all_label_ids = [entry["label_id"] for entry in manifest if "label_id" in entry]
         for entry in manifest:
             scene_id = entry["scene_id"]
             scene_ids.append(scene_id)
             if "label_id" in entry:
                 rec = build_annotation_record_from_label_id(
-                    scene_id, entry["sar"], entry["eo"], entry["label_id"], seed=args.seed
+                    scene_id, entry["sar"], entry["eo"], entry["label_id"],
+                    all_label_ids=all_label_ids, seed=args.seed,
                 )
             else:
                 label = entry.get("label") or random.Random(f"{args.seed}:{scene_id}").choice(LAND_COVER_CLASSES)
